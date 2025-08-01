@@ -8,7 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os/exec"
+	"os"
 	"strings"
 	"time"
 
@@ -123,41 +123,29 @@ func (c *GogClient) Login(loginURL string, username string, password string, hea
 }
 
 func createChromeContext(headless bool) (context.Context, context.CancelFunc, error) {
-	var execPath string
-	// Search for browsers in order of preference
-	browserExecutables := []string{"google-chrome", "chromium", "chrome", "msedge"}
-	for _, browser := range browserExecutables {
-		if p, err := exec.LookPath(browser); err == nil {
-			execPath = p
-			break
-		}
-	}
+	execPath := `C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe`
 
-	if execPath == "" {
-		return nil, nil, fmt.Errorf("no Chrome, Chromium, or Edge executable found in PATH")
+	if _, err := os.Stat(execPath); os.IsNotExist(err) {
+		return nil, nil, fmt.Errorf("Microsoft Edge not found at expected path: %s", execPath)
 	}
 
 	opts := append(chromedp.DefaultExecAllocatorOptions[:],
 		chromedp.ExecPath(execPath),
 		chromedp.Flag("headless", headless),
 	)
-
 	if headless {
 		opts = append(opts, chromedp.Flag("disable-gpu", true))
 	}
 
 	allocatorCtx, cancelAllocator := chromedp.NewExecAllocator(context.Background(), opts...)
 	ctx, cancelContext := chromedp.NewContext(allocatorCtx, chromedp.WithLogf(log.Info().Msgf))
-
 	return ctx, func() {
 		cancelContext()
 		cancelAllocator()
 	}, nil
 }
 
-func performLogin(ctx context.Context, loginURL string, username string, password string,
-	headlessMode bool,
-) (string, error) {
+func performLogin(ctx context.Context, loginURL string, username string, password string, headlessMode bool) (string, error) {
 	var timeoutCtx context.Context
 	var cancel context.CancelFunc
 	var finalURL string
